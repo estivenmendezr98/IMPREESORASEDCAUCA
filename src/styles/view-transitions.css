@@ -1,0 +1,337 @@
+/* View Transitions CSS */
+
+/* Transición por defecto para todas las páginas */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 0.3s;
+  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Transición de fade para cambios de página */
+::view-transition-old(root) {
+  animation-name: fade-out;
+}
+
+::view-transition-new(root) {
+  animation-name: fade-in;
+}
+
+/* Animaciones base */
+@keyframes fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Transición slide para navegación entre tabs */
+[data-transition="slide-left"] ::view-transition-old(root) {
+  animation-name: slide-out-left;
+}
+
+[data-transition="slide-left"] ::view-transition-new(root) {
+  animation-name: slide-in-right;
+}
+
+[data-transition="slide-right"] ::view-transition-old(root) {
+  animation-name: slide-out-right;
+}
+
+[data-transition="slide-right"] ::view-transition-new(root) {
+  animation-name: slide-in-left;
+}
+
+@keyframes slide-out-left {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-100%);
+  }
+}
+
+@keyframes slide-in-right {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes slide-out-right {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes slide-in-left {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+/* Transiciones específicas para componentes */
+
+/* Header con transición suave */
+.header-transition {
+  view-transition-name: main-header;
+}
+
+::view-transition-old(main-header),
+::view-transition-new(main-header) {
+  animation-duration: 0.2s;
+  animation-timing-function: ease-out;
+}
+
+/* Navegación con transición */
+.nav-transition {
+  view-transition-name: main-navigation;
+}
+
+::view-transition-old(main-navigation),
+::view-transition-new(main-navigation) {
+  animation-duration: 0.25s;
+  animation-timing-function: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+/* Contenido principal */
+.main-content-transition {
+  view-transition-name: main-content;
+}
+
+::view-transition-old(main-content) {
+  animation-name: scale-fade-out;
+}
+
+::view-transition-new(main-content) {
+  animation-name: scale-fade-in;
+}
+
+@keyframes scale-fade-out {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+}
+
+@keyframes scale-fade-in {
+  from {
+    opacity: 0;
+    transform: scale(1.05);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Transiciones para modales */
+.modal-transition {
+  view-transition-name: modal-overlay;
+}
+
+::view-transition-old(modal-overlay) {
+  animation-name: modal-fade-out;
+}
+
+::view-transition-new(modal-overlay) {
+  animation-name: modal-fade-in;
+}
+
+@keyframes modal-fade-out {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+}
+
+@keyframes modal-fade-in {
+  from {
+    opacity: 0;
+    transform: scale(1.1);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Transiciones para cards y elementos de lista */
+.card-transition {
+  view-transition-name: var(--card-name);
+}
+
+::view-transition-old(card),
+::view-transition-new(card) {
+  animation-duration: 0.2s;
+  animation-timing-function: ease-in-out;
+}
+
+/* Transición para botones importantes */
+.button-transition {
+  view-transition-name: var(--button-name);
+}
+
+::view-transition-old(button),
+::view-transition-new(button) {
+  animation-duration: 0.15s;
+  animation-timing-function: ease-out;
+}
+
+/* Transiciones para gráficos y datos */
+.chart-transition {
+  view-transition-name: chart-container;
+}
+
+::view-transition-old(chart-container) {
+  animation-name: chart-fade-out;
+}
+
+::view-transition-new(chart-container) {
+  animation-name: chart-fade-in;
+}
+
+@keyframes chart-fade-out {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+}
+
+@keyframes chart-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Transiciones para formularios */
+.form-transition {
+  view-transition-name: form-container;
+}
+
+::view-transition-old(form-container),
+::view-transition-new(form-container) {
+  animation-duration: 0.25s;
+  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Transiciones para tablas */
+.table-transition {
+  view-transition-name: data-table;
+}
+
+::view-transition-old(data-table) {
+  animation-name: table-slide-out;
+}
+
+::view-transition-new(data-table) {
+  animation-name: table-slide-in;
+}
+
+@keyframes table-slide-out {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(-30px);
+  }
+}
+
+@keyframes table-slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Transiciones para estadísticas */
+.stats-transition {
+  view-transition-name: stats-grid;
+}
+
+::view-transition-old(stats-grid),
+::view-transition-new(stats-grid) {
+  animation-duration: 0.3s;
+  animation-timing-function: ease-out;
+}
+
+/* Fallback para navegadores sin soporte */
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation-duration: 0.1s !important;
+  }
+}
+
+/* Transiciones específicas para el tema del sistema */
+.dashboard-transition {
+  view-transition-name: dashboard-main;
+}
+
+.upload-transition {
+  view-transition-name: upload-section;
+}
+
+.users-transition {
+  view-transition-name: users-section;
+}
+
+.reports-transition {
+  view-transition-name: reports-section;
+}
+
+.management-transition {
+  view-transition-name: management-section;
+}
+
+/* Transición suave para cambios de estado de loading */
+.loading-transition {
+  view-transition-name: loading-state;
+}
+
+::view-transition-old(loading-state),
+::view-transition-new(loading-state) {
+  animation-duration: 0.2s;
+  animation-timing-function: ease-in-out;
+}

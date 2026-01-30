@@ -1,0 +1,3 @@
+user_id,report_timestamp,print_total,print_color,print_mono,copy_total,copy_color,copy_mono,scan_total,fax_total
+1001,2025-01-15 10:00:00,10,2,8,5,1,4,3,0
+1002,2025-01-15 10:05:00,20,5,15,0,0,0,2,0

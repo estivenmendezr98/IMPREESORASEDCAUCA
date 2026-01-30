@@ -1,0 +1,117 @@
+import React from 'react';
+import { LogOut, BarChart3, Upload, Users, FileText, Settings, Monitor, Database, Target, Building, Calendar } from 'lucide-react';
+import { useAuth } from '../hooks/useAuth';
+import { useNavigationTransition } from '../hooks/useViewTransition';
+
+interface LayoutProps {
+  children: React.ReactNode;
+  currentPage?: 'dashboard' | 'upload' | 'users' | 'reports' | 'management' | 'printers' | 'import-history' | 'total-reports' | 'office-stats' | 'calendar';
+  onNavigate?: (page: string) => void;
+}
+
+export function Layout({ children, currentPage = 'dashboard', onNavigate }: LayoutProps) {
+  const { user, signOut, isAdmin, isReader, canModify, isReadOnly } = useAuth();
+  const { navigateWithTransition } = useNavigationTransition();
+
+  const navigation = [
+    { id: 'dashboard', name: 'Dashboard', icon: BarChart3 },
+    { id: 'upload', name: 'Subir CSV', icon: Upload }, // Siempre visible para testing
+    { id: 'users', name: 'Usuarios', icon: Users },
+    { id: 'printers', name: 'Impresoras', icon: Monitor }, // Siempre visible para testing
+    { id: 'office-stats', name: 'Por Oficina', icon: Building },
+    { id: 'reports', name: 'Reportes', icon: FileText },
+    { id: 'total-reports', name: 'Reporte Total', icon: Target },
+    { id: 'calendar', name: 'Calendario', icon: Calendar },
+    ...(canModify() ? [{ id: 'import-history', name: 'Historial CSV', icon: Database }] : []),
+    ...(isAdmin() ? [{ id: 'management', name: 'Gestión', icon: Settings }] : []),
+  ];
+
+  const handleSignOut = async () => {
+    await signOut();
+  };
+
+  const handleNavigation = (pageId: string) => {
+    if (onNavigate) {
+      // Determinar dirección de la transición basada en el orden de las páginas
+      const currentIndex = navigation.findIndex(nav => nav.id === currentPage);
+      const targetIndex = navigation.findIndex(nav => nav.id === pageId);
+      const transitionDirection = targetIndex > currentIndex ? 'slide-left' : 'slide-right';
+
+      navigateWithTransition(() => {
+        onNavigate(pageId);
+      }, transitionDirection);
+    }
+  };
+  return (
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <header className="bg-white shadow-sm border-b border-gray-200 header-transition">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-16">
+            <div className="flex items-center">
+              <img
+                src="/img/logosedcauca.png"
+                alt="SEDCAUCA logo"
+                className="h-14 w-auto object-contain"
+                onError={(e) => {
+                  // Fallback to icon if image fails to load
+                  e.currentTarget.style.display = 'none';
+                  e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                }}
+              />
+              <div className="h-10 w-10 bg-blue-600 rounded-lg flex items-center justify-center hidden">
+                <Building className="h-6 w-6 text-white" />
+              </div>
+              <h1 className="ml-3 text-xl font-semibold text-gray-900">
+                SEDCAUCA Impresoras
+              </h1>
+            </div>
+
+            <div className="flex items-center space-x-4">
+              <span className="text-sm text-gray-700">
+                {user?.email} {isAdmin() && '(Admin)'} {isReader() && '(Lector)'}
+              </span>
+              <button
+                onClick={handleSignOut}
+                className="inline-flex items-center px-3 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 transition-colors"
+              >
+                <LogOut className="h-4 w-4 mr-2" />
+                Salir
+              </button>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <div className="w-full px-4 sm:px-6 lg:px-8 py-8">
+        {/* Navigation Tabs */}
+        <nav className="flex space-x-8 mb-8 overflow-x-auto nav-transition max-w-full">
+          {navigation.map((item) => {
+            const Icon = item.icon;
+            const isActive = currentPage === item.id;
+
+            return (
+              <button
+                key={item.id}
+                onClick={() => handleNavigation(item.id)}
+                className={`
+                  flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors whitespace-nowrap
+                  ${isActive
+                    ? 'bg-blue-100 text-blue-700'
+                    : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+                  }
+                `}
+              >
+                <Icon className="h-4 w-4 mr-2" />
+                {item.name}
+              </button>
+            );
+          })}
+        </nav>
+
+        {/* Main Content */}
+        <main className="main-content-transition">{children}</main>
+      </div>
+    </div>
+  );
+}

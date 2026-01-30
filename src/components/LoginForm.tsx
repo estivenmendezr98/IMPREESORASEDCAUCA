@@ -1,0 +1,218 @@
+import React, { useState } from 'react';
+import { Eye, EyeOff, LogIn, AlertCircle, Shield, Building } from 'lucide-react';
+import { useAuth } from '../hooks/useAuth';
+import { useViewTransition } from '../hooks/useViewTransition';
+
+export function LoginForm() {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const { startTransition } = useViewTransition();
+
+  const { signIn } = useAuth();
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!email || !password) {
+      startTransition(() => {
+        setError('Por favor, complete todos los campos');
+      });
+      return;
+    }
+
+    if (password.length < 6) {
+      startTransition(() => {
+        setError('La contraseña debe tener al menos 6 caracteres');
+      });
+      return;
+    }
+
+    startTransition(() => {
+      setLoading(true);
+      setError('');
+    });
+
+    try {
+      const { error } = await signIn(email, password);
+
+      if (!error) {
+        // Forzar navegación/recarga si es necesario, aunque el cambio de estado de usuario debería ser suficiente
+        // window.location.href = '/'; // Opcional, si App.tsx no reacciona
+      }
+
+      if (error) {
+        if (error.message.includes('Invalid login credentials')) {
+          startTransition(() => {
+            setError('Credenciales incorrectas. Verifique su email y contraseña.');
+          });
+        } else {
+          startTransition(() => {
+            setError(error.message);
+          });
+        }
+      }
+    } catch (err) {
+      startTransition(() => {
+        setError('Error de conexión. Intente nuevamente.');
+      });
+    } finally {
+      startTransition(() => {
+        setLoading(false);
+      });
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-md w-full space-y-8">
+        {/* Header */}
+        <div className="text-center">
+          <div className="flex justify-center">
+            <div className="relative">
+              <img
+                src="/img/logosedcauca.png"
+                alt="SEDCAUCA logo"
+                className="h-48 w-auto object-contain"
+                onError={(e) => {
+                  // Fallback to icon if image fails to load
+                  e.currentTarget.style.display = 'none';
+                  e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                }}
+              />
+              <div className="h-20 w-20 bg-blue-600 rounded-full flex items-center justify-center hidden">
+                <Building className="h-10 w-10 text-white" />
+              </div>
+            </div>
+          </div>
+          <h2 className="mt-6 text-3xl font-extrabold text-gray-900">
+            SEDCAUCA
+          </h2>
+          <h3 className="mt-2 text-xl font-semibold text-gray-700">
+            Sistema de Gestión de Impresiones
+          </h3>
+          <p className="mt-2 text-sm text-gray-600">
+            Inicie sesión para acceder al dashboard
+          </p>
+        </div>
+
+        {/* Form */}
+        <form className="mt-8 space-y-6 form-transition" onSubmit={handleSubmit}>
+          <div className="bg-white p-8 rounded-xl shadow-lg">
+            <div className="space-y-6">
+              {/* Email */}
+              <div>
+                <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
+                  Correo Electrónico
+                </label>
+                <input
+                  id="email"
+                  name="email"
+                  type="email"
+                  autoComplete="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="appearance-none relative block w-full px-3 py-3 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-lg focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
+                  placeholder="usuario@sedcauca.gov.co"
+                />
+              </div>
+
+              {/* Password */}
+              <div>
+                <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
+                  Contraseña
+                </label>
+                <div className="relative">
+                  <input
+                    id="password"
+                    name="password"
+                    type={showPassword ? 'text' : 'password'}
+                    autoComplete="current-password"
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="appearance-none relative block w-full px-3 py-3 pr-10 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-lg focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
+                    placeholder="Ingrese su contraseña"
+                    minLength={6}
+                  />
+                  <button
+                    type="button"
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                    onClick={() => setShowPassword(!showPassword)}
+                  >
+                    {showPassword ? (
+                      <EyeOff className="h-4 w-4 text-gray-400" />
+                    ) : (
+                      <Eye className="h-4 w-4 text-gray-400" />
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {/* Error Message */}
+              {error && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                  <div className="flex items-start">
+                    <AlertCircle className="h-4 w-4 text-red-500 mt-0.5 mr-2 flex-shrink-0" />
+                    <p className="text-sm text-red-600">{error}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Submit Button */}
+              <button
+                type="submit"
+                disabled={loading}
+                className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-lg text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {loading ? (
+                  <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
+                ) : (
+                  <>
+                    <LogIn className="h-4 w-4 mr-2" />
+                    Iniciar Sesión
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </form>
+
+        {/* Access Info Card */}
+        <div className="bg-white p-4 rounded-lg border border-gray-200">
+          <div className="flex items-start">
+            <Shield className="h-4 w-4 text-blue-500 mt-0.5 mr-2 flex-shrink-0" />
+            <div className="text-xs text-gray-600">
+              <p className="font-medium mb-1">Acceso Restringido:</p>
+              <ul className="space-y-1">
+                <li>• <strong>Solo usuarios autorizados</strong> pueden acceder al sistema</li>
+                <li>• <strong>Cuentas creadas por administradores</strong> únicamente</li>
+                <li>• <strong>Tres tipos de usuarios:</strong> Administradores, Lectores y Usuarios de impresiones</li>
+                <li>• <strong>Contacte a su administrador</strong> si necesita acceso</li>
+                <li>• <strong>Datos seguros y protegidos</strong> con autenticación robusta</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        {/* Contact Admin Card */}
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <div className="flex items-start">
+            <AlertCircle className="h-4 w-4 text-blue-500 mt-0.5 mr-2 flex-shrink-0" />
+            <div className="text-xs text-blue-700">
+              <p className="font-medium mb-1">¿No tiene acceso?</p>
+              <p>
+                Si necesita una cuenta para acceder al sistema, contacte a su administrador de TI
+                o al responsable del sistema de impresiones para que le cree una cuenta con los
+                permisos apropiados.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

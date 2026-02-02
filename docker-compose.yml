@@ -10,7 +10,7 @@ services:
       POSTGRES_DB: impresiones_db
     volumes:
       - ./database/setup_impresiones_db.sql:/docker-entrypoint-initdb.d/init.sql
-      - postgres_data:/var/lib/postgresql/data
+      - ./datos_db:/var/lib/postgresql/data
     ports:
       - "5432:5432"
 
@@ -29,16 +29,20 @@ services:
       - PORT=3000
     depends_on:
       - db
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
 
   frontend:
     build: .
     restart: always
+    volumes:
+      - .:/app
+      - /app/node_modules
     ports:
       - "5173:5173"
     environment:
-      - VITE_API_URL=http://localhost:3000/api
+      - VITE_API_URL=/api
+      - VITE_API_TARGET=http://backend:3000
     depends_on:
       - backend
-
-volumes:
-  postgres_data:

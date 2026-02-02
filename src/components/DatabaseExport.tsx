@@ -11,7 +11,6 @@ import {
   Info,
   Loader2
 } from 'lucide-react';
-import { apiClient } from '../lib/api';
 import { useAuth } from '../hooks/useAuth';
 
 interface ExportOptions {
@@ -59,8 +58,28 @@ export function DatabaseExport() {
       try {
         console.log('🚀 Iniciando exportación de base de datos via backend...');
 
-        // Llamamos al endpoint del backend para descarga directa
-        const blob = await apiClient.exportDatabaseSQL();
+        // Llamada directa usando fetch para evitar problemas de caché con apiClient
+        const token = localStorage.getItem('impresiones_app_auth');
+        const headers: HeadersInit = {};
+
+        if (token) {
+          try {
+            const session = JSON.parse(token);
+            if (session?.access_token) {
+              headers['Authorization'] = `Bearer ${session.access_token}`;
+            }
+          } catch (e) { console.error('Error parsing token', e); }
+        }
+
+        // Relative path uses Vite proxy
+        const response = await fetch('/api/admin/export-sql', { headers });
+
+        if (!response.ok) {
+          throw new Error(`Error en la petición: ${response.statusText}`);
+        }
+
+        const blob = await response.blob();
+        const totalRecords = response.headers.get('X-Total-Records');
 
         // Crear URL para descarga
         const url = window.URL.createObjectURL(blob);
@@ -80,7 +99,7 @@ export function DatabaseExport() {
           success: true,
           message: `✅ Base de datos exportada exitosamente como ${filename}`,
           fileSize: blob.size,
-          recordCount: undefined // El backend no devuelve cuenta por ahora en el blob
+          recordCount: totalRecords ? parseInt(totalRecords) : undefined
         };
 
       } catch (error) {

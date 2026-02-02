@@ -23,3 +23,7 @@ dist-ssr
 *.sln
 *.sw?
 .env
+datos_db/
+*.sql
+.env
+node_modules/

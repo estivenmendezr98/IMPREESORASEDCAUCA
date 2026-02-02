@@ -66,6 +66,10 @@ export interface UserTotal {
 const API_URL = import.meta.env.VITE_API_URL || '/api';
 
 export class ApiClient {
+    constructor() {
+        console.log('ApiClient Initialized - v3 (Auth Methods Added)');
+    }
+
     private async request(endpoint: string, options: RequestInit = {}): Promise<any> {
         const url = `${API_URL}${endpoint}`;
         const headers: HeadersInit = {
@@ -307,6 +311,42 @@ export class ApiClient {
         return this.request('/assignments');
     }
 
+    // Email Configuration
+    async getEmailStatus(): Promise<{ isActive: boolean; label: string; isConnected: boolean }> {
+        return this.request('/settings/email/status');
+    }
+
+    async saveEmailConfig(label: string, isActive: boolean): Promise<any> {
+        return this.request('/settings/email', {
+            method: 'POST',
+            body: JSON.stringify({ label, isActive })
+        });
+    }
+
+    async getGmailAuthUrl(clientId: string, clientSecret: string): Promise<{ url: string }> {
+        return this.request('/settings/email/auth', {
+            method: 'POST',
+            body: JSON.stringify({ clientId, clientSecret })
+        });
+    }
+
+    async authenticateGmail(code: string): Promise<any> {
+        return this.request('/settings/email/callback', {
+            method: 'POST',
+            body: JSON.stringify({ code })
+        });
+    }
+
+    async runEmailImport(): Promise<any> {
+        return this.request('/settings/email/run', {
+            method: 'POST'
+        });
+    }
+
+    async getEmailLogs(): Promise<any[]> {
+        return this.request('/settings/email/logs');
+    }
+
     async exportDatabaseSQL(): Promise<Blob> {
         const url = `${API_URL}/admin/export-sql`;
         const headers: HeadersInit = {};
@@ -329,5 +369,7 @@ export class ApiClient {
     }
 }
 
-export const apiClient = new ApiClient();
+const apiClient = new ApiClient();
+
+export { apiClient };
 export default apiClient;

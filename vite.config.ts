@@ -8,9 +8,10 @@ export default defineConfig({
     exclude: ['lucide-react'],
   },
   server: {
+    host: true, // Needed for Docker to expose the server
     proxy: {
       '/api': {
-        target: 'http://localhost:3000',
+        target: process.env.VITE_API_TARGET || 'http://localhost:3000',
         changeOrigin: true,
       },
     },

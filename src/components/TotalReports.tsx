@@ -19,7 +19,7 @@ import {
   Target
 } from 'lucide-react';
 import apiClient from '../lib/api';
-import { format, subMonths, startOfMonth, endOfMonth, startOfYear, endOfYear } from 'date-fns';
+import { format, subMonths, startOfMonth, endOfMonth, startOfYear, endOfYear, endOfDay } from 'date-fns';
 import { es } from 'date-fns/locale';
 import {
   BarChart,
@@ -98,7 +98,7 @@ export function TotalReports() {
       case 'all':
         // Para "todos los datos", usar desde hace 5 años hasta ahora
         start = new Date(now.getFullYear() - 5, 0, 1);
-        end = now;
+        end = endOfDay(now);
         break;
 
       case 'current_year':
@@ -346,18 +346,7 @@ export function TotalReports() {
     }
   };
 
-  if (totalsLoading) {
-    return (
-      <div className="animate-pulse space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          {[...Array(4)].map((_, i) => (
-            <div key={i} className="bg-white p-6 rounded-lg shadow-sm h-32"></div>
-          ))}
-        </div>
-        <div className="bg-white p-6 rounded-lg shadow-sm h-96"></div>
-      </div>
-    );
-  }
+
 
   return (
     <div className="space-y-6">
@@ -461,7 +450,13 @@ export function TotalReports() {
       </div>
 
       {/* Totales Principales */}
-      {globalTotals && (
+      {totalsLoading ? (
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="bg-white p-6 rounded-lg shadow-sm h-32 animate-pulse"></div>
+          ))}
+        </div>
+      ) : globalTotals && (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           <div className="bg-blue-50 p-6 rounded-lg border border-blue-200">
             <div className="flex items-center">

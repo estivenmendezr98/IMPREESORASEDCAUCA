@@ -8,6 +8,8 @@ import jwt from 'jsonwebtoken';
 import { stringify } from 'csv-stringify/sync';
 import { generateDatabaseExport } from './utils/backup.js';
 import importRoutes from './routes/import.js';
+import GmailService from './services/gmail.js';
+import CronService from './services/cron.js';
 
 dotenv.config();
 
@@ -24,8 +26,13 @@ const pool = new Pool({
   password: process.env.DB_PASSWORD
 });
 
+// Initialize Gmail Service
+const gmailService = new GmailService(pool);
+
 // Middleware
-app.use(cors());
+app.use(cors({
+  exposedHeaders: ['X-Total-Records']
+}));
 app.use(express.json());
 
 // Verificar conexión a la base de datos
@@ -35,6 +42,10 @@ pool.connect((err, client, release) => {
   } else {
     console.log('✅ Conectado a PostgreSQL');
     release();
+
+    // Iniciar Cron
+    const cronService = new CronService(pool);
+    cronService.start();
   }
 });
 
@@ -42,6 +53,8 @@ pool.connect((err, client, release) => {
 if (!fs.existsSync('./uploads')) {
   fs.mkdirSync('./uploads');
 }
+
+
 
 // ============================================================================
 // RUTAS DE LA API
@@ -148,9 +161,11 @@ app.post('/api/users', async (req, res) => {
     const { email, full_name, password, role, office, department, status } = req.body;
 
     // Generar ID
-    const id = role === 'admin' ? `admin-${Date.now()}` :
-      role === 'reader' ? `reader-${Date.now()}` :
-        `user-${Date.now()}`;
+    let idPrefix = 'user';
+    if (role === 'superadmin') idPrefix = 'superadmin';
+    else if (role === 'admin') idPrefix = 'admin';
+    else if (role === 'reader') idPrefix = 'reader';
+    const id = `${idPrefix}-${Date.now()}`;
 
     // Hash password (default to '123456' if not provided, though frontend should provide it)
     const saltRounds = 10;
@@ -220,15 +235,36 @@ app.get('/api/users/:id', async (req, res) => {
 app.put('/api/users/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { full_name, email, office, department, status } = req.body;
+    const { full_name, email, office, department, status, role, password } = req.body;
 
-    const result = await pool.query(
-      `UPDATE users 
-       SET full_name = $1, email = $2, office = $3, department = $4, status = $5, role = COALESCE($6, role), updated_at = NOW()
-       WHERE id = $7
-       RETURNING *`,
-      [full_name, email, office, department, status, req.body.role, id]
-    );
+    let passwordHash = null;
+    if (password && password.length >= 6) {
+      const saltRounds = 10;
+      passwordHash = await bcrypt.hash(password, saltRounds);
+    }
+
+    let query = `
+      UPDATE users 
+      SET 
+        full_name = COALESCE($1, full_name), 
+        email = COALESCE($2, email), 
+        office = COALESCE($3, office), 
+        department = COALESCE($4, department), 
+        status = COALESCE($5, status), 
+        role = COALESCE($6, role), 
+        updated_at = NOW()`;
+
+    const params = [full_name, email, office, department, status, role];
+
+    if (passwordHash) {
+      query += `, password_hash = $${params.length + 1}`;
+      params.push(passwordHash);
+    }
+
+    query += ` WHERE id = $${params.length + 1} RETURNING *`;
+    params.push(id);
+
+    const result = await pool.query(query, params);
 
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Usuario no encontrado' });
@@ -311,7 +347,7 @@ app.get('/api/reports/trends', async (req, res) => {
     const result = await pool.query(
       `SELECT year, month, print_total, copy_total, scan_total, fax_total 
        FROM prints_monthly 
-       WHERE created_at >= $1 AND created_at <= $2 
+       WHERE MAKE_DATE(year, month, 1) >= $1::date AND MAKE_DATE(year, month, 1) <= $2::date
        ORDER BY year, month`,
       [start, end]
     );
@@ -383,7 +419,9 @@ app.get('/api/reports/users', async (req, res) => {
         (
            SELECT json_agg(pm.*) 
            FROM prints_monthly pm 
-           WHERE pm.user_id = u.id AND pm.created_at >= $1 AND pm.created_at <= $2
+           WHERE pm.user_id = u.id 
+           AND MAKE_DATE(pm.year, pm.month, 1) >= $1::date 
+           AND MAKE_DATE(pm.year, pm.month, 1) <= $2::date
         ) as prints_monthly,
         (
            SELECT json_agg(json_build_object('report_timestamp', pr.report_timestamp))
@@ -393,7 +431,9 @@ app.get('/api/reports/users', async (req, res) => {
       FROM users u
       WHERE EXISTS (
         SELECT 1 FROM prints_monthly pm 
-        WHERE pm.user_id = u.id AND pm.created_at >= $1 AND pm.created_at <= $2
+        WHERE pm.user_id = u.id 
+        AND MAKE_DATE(pm.year, pm.month, 1) >= $1::date 
+        AND MAKE_DATE(pm.year, pm.month, 1) <= $2::date
       )
     `;
 
@@ -419,7 +459,7 @@ app.get('/api/reports/detailed-monthly', async (req, res) => {
             u.id, u.status, u.office, u.full_name
         FROM prints_monthly pm
         JOIN users u ON pm.user_id = u.id
-        WHERE pm.created_at >= $1 AND pm.created_at <= $2
+        WHERE MAKE_DATE(pm.year, pm.month, 1) >= $1::date AND MAKE_DATE(pm.year, pm.month, 1) <= $2::date
       `;
 
     const params = [start, end];
@@ -489,7 +529,7 @@ app.get('/api/reports/export', async (req, res) => {
                 (pm.print_total + pm.copy_total + pm.scan_total + pm.fax_total) as "Total Operaciones"
             FROM prints_monthly pm
             JOIN users u ON pm.user_id = u.id
-            WHERE pm.created_at >= $1 AND pm.created_at <= $2
+            WHERE MAKE_DATE(pm.year, pm.month, 1) >= $1::date AND MAKE_DATE(pm.year, pm.month, 1) <= $2::date
         `;
 
     const params = [start, end];
@@ -534,6 +574,7 @@ app.get('/api/admin/export-sql', async (req, res) => {
 
     res.setHeader('Content-Type', 'application/sql');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('X-Total-Records', totalRecords.toString());
     res.send(sqlContent);
   } catch (error) {
     console.error('Error generating SQL export:', error);
@@ -704,6 +745,110 @@ app.get('/api/imports/log', async (req, res) => {
   } catch (error) {
     console.error('Error obteniendo log de importaciones:', error);
     res.status(500).json({ error: 'Error obteniendo log de importaciones' });
+  }
+});
+
+// ============================================================================
+// CONFIGURACIÓN DE CORREO AUTOMÁTICO
+// ============================================================================
+
+app.get('/api/settings/email/status', async (req, res) => {
+  try {
+    const isActive = await gmailService.getConfig('is_active');
+    const label = await gmailService.getConfig('gmail_label');
+    const hasToken = (await gmailService.getConfig('gmail_access_token')) ? true : false;
+
+    res.json({
+      isActive: isActive === 'true',
+      label: label || 'CSV-Imports',
+      isConnected: hasToken
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/settings/email', async (req, res) => {
+  try {
+    const { label, isActive } = req.body;
+    await gmailService.setConfig('gmail_label', label);
+    await gmailService.setConfig('is_active', String(isActive));
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/settings/email/auth', async (req, res) => {
+  try {
+    const { clientId, clientSecret } = req.body;
+    console.log('Generating auth URL for:', clientId?.substring(0, 10) + '...');
+    const url = await gmailService.generateAuthUrl(clientId, clientSecret);
+    res.json({ url });
+  } catch (error) {
+    console.error('Error generating Auth URL:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Handle OAuth callback from Google (GET request)
+app.get('/api/settings/email/callback', async (req, res) => {
+  try {
+    const { code } = req.query;
+
+    if (!code) {
+      return res.status(400).send('No authorization code received');
+    }
+
+    // Authenticate with the code
+    await gmailService.authenticate(code);
+
+    // Redirect back to frontend with success
+    res.send(`
+      <html>
+        <body>
+          <h2>✅ Autenticación exitosa</h2>
+          <p>Puedes cerrar esta ventana y volver a la aplicación.</p>
+          <script>
+            setTimeout(() => {
+              window.location.href = 'http://localhost:5173';
+            }, 2000);
+          </script>
+        </body>
+      </html>
+    `);
+  } catch (error) {
+    console.error('Error in OAuth callback:', error);
+    res.status(500).send(`Error: ${error.message}`);
+  }
+});
+
+app.post('/api/settings/email/callback', async (req, res) => {
+  try {
+    const { code } = req.body;
+    await gmailService.authenticate(code);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+
+app.post('/api/settings/email/run', async (req, res) => {
+  try {
+    const result = await cronService.runJob();
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/settings/email/logs', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM import_log ORDER BY created_at DESC LIMIT 50');
+    res.json(result.rows);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 });
 

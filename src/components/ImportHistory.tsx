@@ -15,7 +15,8 @@ import {
   RefreshCw,
   X,
   Edit3,
-  Trash2
+  Trash2,
+  Loader2
 } from 'lucide-react';
 import { apiClient } from '../lib/api';
 import { format } from 'date-fns';
@@ -29,6 +30,8 @@ interface ImportLogEntry {
   rows_processed: number;
   rows_success: number;
   rows_failed: number;
+  total_rows?: number;
+  status?: string; // 'processing', 'completed', 'failed'
   error_details: any;
   imported_by: string | null;
   importer_email?: string;
@@ -84,6 +87,7 @@ export function ImportHistory() {
         importer_name: item.importer_name || 'Sistema'
       })) as ImportLogEntry[];
     },
+    refetchInterval: 5000 // Refrescar cada 5 seg para ver actualizaciones de progreso
   });
 
   // Query para estadísticas de importación
@@ -92,11 +96,14 @@ export function ImportHistory() {
     queryFn: async () => {
       if (!importHistory) return null;
 
-      const totalImports = importHistory.length;
+      // Calcular estadísticas solo con importaciones completadas para no sesgar datos con procesos en curso
+      const completedImports = importHistory.filter(i => i.status !== 'processing');
+      const totalImports = importHistory.length; // Total incluye todos
+
       const totalFiles = new Set(importHistory.map(i => i.file_name)).size;
-      const totalRowsProcessed = importHistory.reduce((sum, i) => sum + i.rows_processed, 0);
-      const totalRowsSuccess = importHistory.reduce((sum, i) => sum + i.rows_success, 0);
-      const totalRowsFailed = importHistory.reduce((sum, i) => sum + i.rows_failed, 0);
+      const totalRowsProcessed = completedImports.reduce((sum, i) => sum + i.rows_processed, 0);
+      const totalRowsSuccess = completedImports.reduce((sum, i) => sum + i.rows_success, 0);
+      const totalRowsFailed = completedImports.reduce((sum, i) => sum + i.rows_failed, 0);
       const successRate = totalRowsProcessed > 0 ? (totalRowsSuccess / totalRowsProcessed) * 100 : 0;
 
       const dates = importHistory.map(i => new Date(i.imported_at)).sort((a, b) => a.getTime() - b.getTime());
@@ -151,6 +158,7 @@ export function ImportHistory() {
     const headers = [
       'Archivo',
       'Fecha de Importación',
+      'Estado',
       'Registros Procesados',
       'Registros Exitosos',
       'Registros Fallidos',
@@ -165,6 +173,7 @@ export function ImportHistory() {
       ...filteredImports.map(item => [
         `"${item.file_name}"`,
         `"${format(new Date(item.imported_at), 'dd/MM/yyyy HH:mm:ss', { locale: es })}"`,
+        `"${item.status || 'completed'}"`,
         item.rows_processed,
         item.rows_success,
         item.rows_failed,
@@ -186,12 +195,37 @@ export function ImportHistory() {
     document.body.removeChild(link);
   };
 
-  // Función para cambiar fecha de importación (Deshabilitada en local para esta fase, requiere implementación backend)
-  const changeBatchDate = async (_batchId: string, _newImportDate: string) => {
-    // Note: Esta función requiere un nuevo endpoint en el backend para realizar la migración de fechas
-    // de forma segura dentro de una transacción.
-    alert('La función de cambiar fecha no está disponible actualmente en la versión local.');
-    setChangingDate(false);
+  const changeBatchDate = async (batchId: string, newImportDate: string) => {
+    try {
+      setChangingDate(true);
+      const response = await fetch(`/api/imports/${batchId}/date`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ newDate: newImportDate })
+      });
+
+      if (!response.ok) {
+        throw new Error(await response.text());
+      }
+
+      const result = await response.json();
+
+      setDateChangeResult({
+        success: true,
+        message: result.message || 'Fecha actualizada satisfactoriamente'
+      });
+
+      // Refresh list
+      refetch();
+
+    } catch (error: any) {
+      setDateChangeResult({
+        success: false,
+        message: error.message || 'Error al actualizar fecha'
+      });
+    } finally {
+      setChangingDate(false);
+    }
   };
 
   const startEditingDate = (importEntry: ImportLogEntry) => {
@@ -284,7 +318,10 @@ export function ImportHistory() {
     return ((success / processed) * 100);
   };
 
-  const getStatusColor = (processed: number, success: number, failed: number) => {
+  const getStatusColor = (status: string | undefined, processed: number, success: number, failed: number) => {
+    if (status === 'processing') return 'text-blue-600 bg-blue-100';
+    if (status === 'failed') return 'text-red-600 bg-red-100';
+
     const rate = getSuccessRate(processed, success);
     if (rate === 100) return 'text-green-600 bg-green-100';
     if (rate >= 90) return 'text-yellow-600 bg-yellow-100';
@@ -444,7 +481,7 @@ export function ImportHistory() {
             <div className="p-6 border-b border-gray-200">
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-medium text-gray-900">
-                  Cambiar Fecha de Importación
+                  Cambiar Fecha de los DATOS
                 </h3>
                 <button
                   onClick={cancelEditingDate}
@@ -458,7 +495,7 @@ export function ImportHistory() {
             <div className="p-6">
               <div className="mb-4">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Nueva Fecha de Importación
+                  Nueva Fecha para los Registros
                 </label>
                 <input
                   type="date"
@@ -467,8 +504,8 @@ export function ImportHistory() {
                   max={new Date().toISOString().split('T')[0]}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
-                <p className="text-xs text-gray-500 mt-1">
-                  Los datos se reasignarán a esta fecha manteniendo la hora original
+                <p className="text-xs text-amber-700 bg-amber-50 p-2 rounded mt-2 border border-amber-200">
+                  <strong>⚠️ Importante:</strong> Esta acción moverá todos los registros de este archivo a la fecha seleccionada. Las estadísticas y gráficas se recalcularán automáticamente.
                 </p>
               </div>
 
@@ -646,20 +683,38 @@ export function ImportHistory() {
             <tbody className="bg-white divide-y divide-gray-200">
               {filteredImports.map((item) => {
                 const successRate = getSuccessRate(item.rows_processed, item.rows_success);
-                const statusColor = getStatusColor(item.rows_processed, item.rows_success, item.rows_failed);
+                const statusColor = getStatusColor(item.status, item.rows_processed, item.rows_success, item.rows_failed);
 
                 return (
                   <tr key={item.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusColor}`}>
-                        {successRate === 100 ? (
-                          <CheckCircle className="h-3 w-3 mr-1" />
+                        {item.status === 'processing' ? (
+                          <>
+                            <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                            Procesando...
+                          </>
+                        ) : item.status === 'failed' ? (
+                          <>
+                            <AlertCircle className="h-3 w-3 mr-1" />
+                            Falló
+                          </>
+                        ) : successRate === 100 ? (
+                          <>
+                            <CheckCircle className="h-3 w-3 mr-1" />
+                            100% éxito
+                          </>
                         ) : item.rows_failed > 0 ? (
-                          <AlertCircle className="h-3 w-3 mr-1" />
+                          <>
+                            <AlertCircle className="h-3 w-3 mr-1" />
+                            {successRate.toFixed(0)}% éxito
+                          </>
                         ) : (
-                          <Clock className="h-3 w-3 mr-1" />
+                          <>
+                            <Clock className="h-3 w-3 mr-1" />
+                            Completado
+                          </>
                         )}
-                        {successRate.toFixed(0)}% éxito
                       </div>
                     </td>
 
@@ -694,7 +749,8 @@ export function ImportHistory() {
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm text-gray-900">
                         <div className="font-medium">
-                          {item.rows_processed.toLocaleString()} total
+                          {item.rows_processed.toLocaleString()}
+                          {item.total_rows ? ` / ${item.total_rows}` : ' total'}
                         </div>
                         <div className="text-gray-500">
                           procesados
@@ -799,124 +855,70 @@ export function ImportHistory() {
             </div>
 
             <div className="p-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-2 gap-4 mb-6">
                 <div>
-                  <h4 className="text-sm font-medium text-gray-900 mb-3">
-                    Información del Archivo
-                  </h4>
-                  <div className="space-y-2 text-sm">
-                    <div>
-                      <span className="text-gray-500">Nombre:</span>
-                      <span className="ml-2 font-medium">{selectedImport.file_name}</span>
-                    </div>
-                    <div>
-                      <span className="text-gray-500">ID de Lote:</span>
-                      <span className="ml-2 font-mono text-xs">{selectedImport.batch_id}</span>
-                    </div>
-                    <div>
-                      <span className="text-gray-500">Fecha:</span>
-                      <span className="ml-2">
-                        {format(new Date(selectedImport.imported_at), 'dd/MM/yyyy HH:mm:ss', { locale: es })}
-                      </span>
-                    </div>
-                  </div>
+                  <p className="text-sm text-gray-500">Archivo</p>
+                  <p className="font-medium">{selectedImport.file_name}</p>
                 </div>
-
                 <div>
-                  <h4 className="text-sm font-medium text-gray-900 mb-3">
-                    Usuario que Importó
-                  </h4>
-                  <div className="space-y-2 text-sm">
-                    <div>
-                      <span className="text-gray-500">Nombre:</span>
-                      <span className="ml-2 font-medium">{selectedImport.importer_name || 'Sistema'}</span>
-                    </div>
-                    <div>
-                      <span className="text-gray-500">Email:</span>
-                      <span className="ml-2">{selectedImport.importer_email || 'Sistema'}</span>
-                    </div>
-                    <div>
-                      <span className="text-gray-500">ID Usuario:</span>
-                      <span className="ml-2 font-mono text-xs">{selectedImport.imported_by || 'N/A'}</span>
-                    </div>
-                  </div>
+                  <p className="text-sm text-gray-500">ID de Lote</p>
+                  <p className="font-medium font-mono text-sm">{selectedImport.batch_id}</p>
                 </div>
-
                 <div>
-                  <h4 className="text-sm font-medium text-gray-900 mb-3">
-                    Estadísticas de Procesamiento
-                  </h4>
-                  <div className="space-y-2 text-sm">
-                    <div>
-                      <span className="text-gray-500">Total procesados:</span>
-                      <span className="ml-2 font-medium">{selectedImport.rows_processed.toLocaleString()}</span>
-                    </div>
-                    <div>
-                      <span className="text-gray-500">Exitosos:</span>
-                      <span className="ml-2 text-green-600 font-medium">{selectedImport.rows_success.toLocaleString()}</span>
-                    </div>
-                    <div>
-                      <span className="text-gray-500">Fallidos:</span>
-                      <span className="ml-2 text-red-600 font-medium">{selectedImport.rows_failed.toLocaleString()}</span>
-                    </div>
-                    <div>
-                      <span className="text-gray-500">Tasa de éxito:</span>
-                      <span className="ml-2 font-medium">
-                        {getSuccessRate(selectedImport.rows_processed, selectedImport.rows_success).toFixed(1)}%
-                      </span>
-                    </div>
-                  </div>
+                  <p className="text-sm text-gray-500">Fecha</p>
+                  <p className="font-medium">{format(new Date(selectedImport.imported_at), 'dd/MM/yyyy HH:mm:ss')}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">Estado</p>
+                  <p className={`font-medium ${selectedImport.status === 'processing' ? 'text-blue-600' :
+                    selectedImport.status === 'failed' ? 'text-red-600' :
+                      'text-green-600'
+                    }`}>
+                    {selectedImport.status === 'processing' ? 'Procesando' :
+                      selectedImport.status === 'failed' ? 'Fallido' :
+                        'Completado'}
+                  </p>
                 </div>
               </div>
 
-              {selectedImport.error_details &&
-                ((Array.isArray(selectedImport.error_details) && selectedImport.error_details.length > 0) ||
-                  (!Array.isArray(selectedImport.error_details) && Object.keys(selectedImport.error_details).length > 0)) && (
-                  <div className="mt-6">
-                    <h4 className="text-sm font-medium text-gray-900 mb-3">
-                      Detalles de Errores ({Array.isArray(selectedImport.error_details) ? selectedImport.error_details.length : 1})
-                    </h4>
-                    <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                      {Array.isArray(selectedImport.error_details) ? (
-                        <ul className="list-disc list-inside text-xs text-red-700 space-y-1 max-h-40 overflow-y-auto">
-                          {selectedImport.error_details.map((err: any, idx: number) => (
-                            <li key={idx} className="break-words">
-                              {typeof err === 'object' ? JSON.stringify(err) : String(err)}
-                            </li>
-                          ))}
-                        </ul>
-                      ) : (
-                        <pre className="text-xs text-red-700 whitespace-pre-wrap max-h-40 overflow-y-auto">
-                          {JSON.stringify(selectedImport.error_details, null, 2)}
-                        </pre>
-                      )}
-                    </div>
+              <div className="grid grid-cols-3 gap-4 mb-6 bg-gray-50 p-4 rounded-lg">
+                <div className="text-center">
+                  <p className="text-sm text-gray-500">Procesados</p>
+                  <p className="font-bold text-gray-900">{selectedImport.rows_processed}</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-sm text-gray-500">Exitosos</p>
+                  <p className="font-bold text-green-600">{selectedImport.rows_success}</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-sm text-gray-500">Fallidos</p>
+                  <p className="font-bold text-red-600">{selectedImport.rows_failed}</p>
+                </div>
+              </div>
+
+              {selectedImport.error_details && Object.keys(selectedImport.error_details).length > 0 && (
+                <div>
+                  <h4 className="font-medium text-gray-900 mb-2">Detalles de Errores</h4>
+                  <div className="bg-red-50 p-4 rounded-lg border border-red-100 max-h-60 overflow-y-auto">
+                    <pre className="text-xs text-red-800 whitespace-pre-wrap font-mono">
+                      {JSON.stringify(selectedImport.error_details, null, 2)}
+                    </pre>
                   </div>
-                )}
+                </div>
+              )}
+            </div>
+
+            <div className="p-6 border-t border-gray-200 flex justify-end">
+              <button
+                onClick={() => setShowDetails(false)}
+                className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+              >
+                Cerrar
+              </button>
             </div>
           </div>
         </div>
       )}
-
-      {/* Información sobre cambio de fechas */}
-      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-        <div className="flex items-start">
-          <Calendar className="h-5 w-5 text-yellow-500 mt-0.5 mr-3 flex-shrink-0" />
-          <div>
-            <h4 className="text-sm font-medium text-yellow-900 mb-2">
-              📅 Cambio de Fecha de Importación
-            </h4>
-            <div className="text-sm text-yellow-700 space-y-1">
-              <p>• <strong>Función disponible:</strong> Cambiar fecha de importación de lotes CSV existentes</p>
-              <p>• <strong>Proceso:</strong> Actualiza registros raw, agregados mensuales y log de importación</p>
-              <p>• <strong>Hora preservada:</strong> Se mantiene la hora original del CSV</p>
-              <p>• <strong>Recálculo automático:</strong> Diferencias mensuales se actualizan</p>
-              <p>• <strong>Uso típico:</strong> Corregir datos importados con fecha incorrecta</p>
-              <p>• <strong>⚠️ Importante:</strong> Esta operación afecta estadísticas y reportes</p>
-            </div>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }

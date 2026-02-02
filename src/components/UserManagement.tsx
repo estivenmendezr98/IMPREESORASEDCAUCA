@@ -16,12 +16,14 @@ import {
   Shield,
   Database,
   Eye,
-  Trash2
+  Trash2,
+  Mail
 } from 'lucide-react';
 import { apiClient } from '../lib/api';
 import { AdminManagement } from './AdminManagement';
 import { DatabaseExport } from './DatabaseExport';
 import { ReaderManagement } from './ReaderManagement';
+import { EmailConfig } from './EmailConfig';
 
 interface UserData {
   id: string;
@@ -51,12 +53,13 @@ export function UserManagement() {
   const [filterOffice, setFilterOffice] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [editingUsers, setEditingUsers] = useState<{ [key: string]: EditingUser }>({});
-  const [activeTab, setActiveTab] = useState<'list' | 'admins' | 'readers' | 'export'>('list');
+  const [activeTab, setActiveTab] = useState<'list' | 'admins' | 'readers' | 'export' | 'config_email'>('list');
   const [userToDelete, setUserToDelete] = useState<UserData | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteResult, setDeleteResult] = useState<{ success: boolean; message: string } | null>(null);
   const { startTransition } = useViewTransition();
   const { navigateWithTransition } = useNavigationTransition();
+
 
   const queryClient = useQueryClient();
 
@@ -274,7 +277,10 @@ export function UserManagement() {
     ...(isSuperAdmin() ? [{ id: 'admins', name: 'Administradores', icon: Shield }] : []),
     { id: 'readers', name: 'Usuarios Lectores', icon: Eye },
     // Solo Super Admin puede exportar la base de datos
-    ...(isSuperAdmin() ? [{ id: 'export', name: 'Exportar BD', icon: Database }] : [])
+    ...(isSuperAdmin() ? [
+      { id: 'export', name: 'Exportar BD', icon: Database },
+      { id: 'config_email', name: 'Configuración Correo', icon: Mail }
+    ] : [])
   ];
 
   if (usersLoading) {
@@ -387,12 +393,15 @@ export function UserManagement() {
       </div>
 
       {/* Contenido de las tabs */}
+      {/* Contenido de las tabs */}
       {activeTab === 'admins' ? (
         <AdminManagement />
       ) : activeTab === 'readers' ? (
         <ReaderManagement />
       ) : activeTab === 'export' ? (
         <DatabaseExport />
+      ) : activeTab === 'config_email' ? (
+        <EmailConfig />
       ) : (
         <>
           {/* Filtros */}
